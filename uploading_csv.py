@@ -33,46 +33,35 @@ if uploaded_file is not None:
         st.write("### Uploaded File Preview")
         st.write(dataframe)
 
-        # NEW: Next 버튼 추가 및 처리
-        if st.button("Next"):
-            st.write("Searching for genes in BioPortal...")
-
-            gene_column = dataframe.columns[0]  # 첫 번째 열을 유전자 열로 간주
-            gene_matches = []
-
-            for gene in dataframe[gene_column]:
-                search_url = f"{search_base_url}{gene}&apikey={Api}"
-                search_response = requests.get(search_url)
-
-                if search_response.status_code == 200:
-                    search_results = search_response.json().get('collection', [])
-                    if search_results:
-                        for result in search_results[:1]:  # 각 유전자에 대해 상위 1개 결과만 표시
-                            match = {
-                                "Gene": gene,
-                                "Matched Term": result.get('prefLabel', 'N/A'),
-                                "Ontology": result.get('links', {}).get('ontology', 'N/A'),
-                                "Definition": result.get('definition', ['No definition'])[0]  # 정의 표시
-                            }
-                            gene_matches.append(match)
-                    else:
-                        gene_matches.append({"Gene": gene, "Matched Term": "No Match Found", "Ontology": "N/A", "Definition": "N/A"})
-                else:
-                    st.error(f"Failed to search BioPortal for gene: {gene}")
-
-            # 매칭 결과를 데이터프레임으로 표시
-            matches_df = pd.DataFrame(gene_matches)
-            st.write("### Gene Matches:")
-            st.dataframe(matches_df)
-
-            # CSV 파일로 저장 옵션 제공
-            csv_matches = matches_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download Gene Matches as CSV",
-                data=csv_matches,
-                file_name="gene_matches.csv",
-                mime="text/csv"
+        # 열 선택 드롭다운
+        selected_column = st.selectbox("Select Column", list(dataframe.columns))
+        
+        if selected_column:
+            # 선택된 열의 고유 값들을 드롭다운으로 표시
+            unique_values = dataframe[selected_column].unique()
+            selected_value = st.selectbox(
+                f"Select value from {selected_column}",
+                unique_values
             )
+            
+            # 선택된 값에 대한 온톨로지 검색
+            if selected_value and st.button("Search Ontology"):
+                search_url = f"{search_base_url}{selected_value}&apikey={Api}"
+                search_response = requests.get(search_url)
+                
+                if search_response.status_code == 200:
+                    results = search_response.json().get('collection', [])
+                    if results:
+                        st.write(f"### Ontology matches for '{selected_value}':")
+                        for result in results[:5]:  # 상위 5개 결과 표시
+                            st.write("---")
+                            st.write(f"Term: {result.get('prefLabel', 'N/A')}")
+                            st.write(f"Ontology: {result.get('links', {}).get('ontology', 'N/A')}")
+                            st.write(f"Definition: {result.get('definition', ['No definition'])[0]}")
+                    else:
+                        st.write(f"No ontology matches found for '{selected_value}'")
+                else:
+                    st.error(f"Failed to search BioPortal for value: {selected_value}")
 
     else:
         st.error("Could not detect a suitable header row automatically.")
